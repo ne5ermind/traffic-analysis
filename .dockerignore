@@ -1,0 +1,12 @@
+.venv
+**/node_modules
+**/dist
+.git
+data
+models/*
+!models/yolo11n.pt
+**/__pycache__
+.pytest_cache
+frontend
+*.docx
+.env

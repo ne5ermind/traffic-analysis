@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = ["real_model: opt-in pretrained model smoke test"]
+
+[tool.ruff]
+line-length = 150
+[tool.ruff.lint]
+select = ["F"]

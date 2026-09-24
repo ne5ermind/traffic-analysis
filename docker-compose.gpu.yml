@@ -1,0 +1,12 @@
+services:
+  api:
+    build:
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cu128
+  worker:
+    build:
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cu128
+    gpus: all
+    environment:
+      DEVICE: '0'
