@@ -86,6 +86,9 @@ export default function App() {
     return () => clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
+    setProfile(project?.result?.profile ?? "balanced");
+  }, [project?.id, project?.result_run]);
+  useEffect(() => {
     const load = () =>
       api<Health>("/health")
         .then(setHealth)

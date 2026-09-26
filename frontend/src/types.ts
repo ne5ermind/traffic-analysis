@@ -105,6 +105,7 @@ export type Results = {
   elapsed: number;
   device: string;
   model: string;
+  profile?: "fast" | "balanced" | "accurate";
   diagnostics: Record<string, number>;
   calibration: Calibration;
   ai_audit?: AiAudit;
