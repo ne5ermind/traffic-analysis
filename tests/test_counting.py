@@ -42,6 +42,20 @@ def test_trajectory_classification_and_unknown(tmp_path):
     store.close()
 
 
+def test_stationary_detection_is_not_counted_as_traffic(tmp_path):
+    store = TrackStore(tmp_path / "tracks.db")
+    stationary = track()
+    stationary["trajectory"] = [[0.5 + (i % 2) * 0.001, 0.5, i] for i in range(5)]
+    store.save_track(stationary)
+    definitions, _ = classify(store, {"zones": [], "lines": []})
+    result = aggregate(store, definitions, 10)
+    saved = list(store.tracks())[0]
+    store.close()
+    assert not saved["countable"]
+    assert result["total_vehicles"] == 0
+    assert result["diagnostics"]["discarded_stationary_tracks"] == 1
+
+
 def test_exact_interval_boundary_and_empty_interval(tmp_path):
     store = TrackStore(tmp_path / "tracks.db")
     store.save_track(track(t=896))

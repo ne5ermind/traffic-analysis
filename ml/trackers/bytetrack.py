@@ -2,12 +2,20 @@ from types import SimpleNamespace
 import numpy as np
 
 
+TRACKER_PROFILES = {
+    "fast": dict(track_high_thresh=0.25, track_low_thresh=0.08, new_track_thresh=0.30, track_buffer=60, match_thresh=0.80),
+    "balanced": dict(track_high_thresh=0.22, track_low_thresh=0.06, new_track_thresh=0.24, track_buffer=90, match_thresh=0.85),
+    "accurate": dict(track_high_thresh=0.18, track_low_thresh=0.05, new_track_thresh=0.20, track_buffer=90, match_thresh=0.90),
+}
+
+
 class ByteTracker:
-    def __init__(self, fps):
+    def __init__(self, fps, profile="balanced"):
         from ultralytics.trackers.byte_tracker import BYTETracker
 
+        options = TRACKER_PROFILES[profile]
         self.tracker = BYTETracker(
-            SimpleNamespace(track_high_thresh=0.25, track_low_thresh=0.08, new_track_thresh=0.3, track_buffer=60, match_thresh=0.8, fuse_score=True),
+            SimpleNamespace(**options, fuse_score=True),
             frame_rate=max(1, round(fps)),
         )
         # Convert the tracker's frame budget using the actual sampled FPS.

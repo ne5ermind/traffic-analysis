@@ -1,5 +1,5 @@
 import pytest
-from ml.geometry import point_in_zone, cross_direction, line_events, manual_assignment, resample
+from ml.geometry import point_in_zone, cross_direction, line_events, manual_assignment, resample, meaningful_motion
 from ml.pipeline import can_stitch
 from backend.schemas import Calibration
 
@@ -46,10 +46,18 @@ def test_stationary_resampling_and_u_turn():
 def test_fragment_stitch_does_not_merge_reentry_or_concurrent():
     t = {"last_seen": 1, "votes": {"car": 3}, "trajectory": [[0.1, 0.5, 0], [0.2, 0.5, 0.5], [0.3, 0.5, 1]]}
     assert can_stitch(t, [0.4, 0.5], 1.5, "car")
+    assert can_stitch(t, [0.58, 0.51], 2.5, "truck")
     assert not can_stitch(t, [0.3, 0.5], 1, "car")
     assert not can_stitch(t, [0.4, 0.5], 4, "car")
     assert not can_stitch(t, [0.4, 0.5], 1.5, "pedestrian")
     assert not can_stitch(t, [0.1, 0.5], 1.5, "car")
+    assert not can_stitch(t, [0.4, 0.62], 1.5, "car")
+
+
+def test_meaningful_motion_rejects_jitter_but_keeps_tiny_vehicle_and_u_turn():
+    assert not meaningful_motion([[0.5 + (i % 2) * 0.003, 0.5, i] for i in range(20)])
+    assert meaningful_motion([[0.1, 0.5, 0], [0.11, 0.5, 1], [0.124, 0.5, 2]])
+    assert meaningful_motion([[0.1, 0.5, 0], [0.3, 0.5, 1], [0.1, 0.5, 2]])
 
 
 def test_invalid_shapes():

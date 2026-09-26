@@ -65,6 +65,7 @@ export type AiAudit = {
     detector_confidence: number;
     unknown_track_ratio: number;
     discarded_track_ratio: number;
+    discarded_stationary_ratio?: number;
     samples: number;
   };
   checks: { level: "ok" | "warning" | "error"; message: string }[];

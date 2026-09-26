@@ -15,23 +15,53 @@ class Cancelled(Exception):
     pass
 
 
-def can_stitch(track, point, when, cls):
-    """Conservative short-gap motion gate; never merge concurrent tracks/re-entry."""
+def _same_kind(a, b):
+    vehicles = {"car", "truck", "bus", "motorcycle", "bicycle"}
+    return a == b or (a in vehicles and b in vehicles)
+
+
+def can_stitch(track, point, when, cls, box=None, max_gap=2.5):
+    """Reconnect one unambiguous fragment along its recent direction of travel."""
     gap = when - track["last_seen"]
-    if gap <= 0.05 or gap > 1.0 or cls != max(track["votes"], key=track["votes"].get):
+    if gap <= 0.05 or gap > max_gap or not _same_kind(cls, max(track["votes"], key=track["votes"].get)):
         return False
     path = track["trajectory"]
     if len(path) < 3:
         return False
-    a, b = path[-3], path[-1]
+    recent = [p for p in path if path[-1][2] - p[2] <= 1.5][-8:]
+    if len(recent) < 3:
+        recent = path[-3:]
+    a, b = recent[0], recent[-1]
     dt = b[2] - a[2]
     if dt <= 0:
         return False
     velocity = (np.array(b[:2]) - a[:2]) / dt
-    if np.linalg.norm(velocity) < 0.01:
+    speed = float(np.linalg.norm(velocity))
+    if speed < 0.004:
         return False
-    prediction = np.array(b[:2]) + velocity * gap
-    return float(np.linalg.norm(prediction - point)) < 0.025 and float(np.dot(np.array(point) - b[:2], velocity)) > 0
+    last = np.array(path[-1][:2])
+    candidate = np.array(point)
+    displacement = candidate - last
+    direction = velocity / speed
+    along = float(np.dot(displacement, direction))
+    lateral = float(np.linalg.norm(displacement - along * direction))
+    sizes = []
+    for bounds in (track.get("last_box"), box):
+        if bounds:
+            sizes.append(float(np.hypot(bounds[2] - bounds[0], bounds[3] - bounds[1])))
+    object_size = max(sizes, default=0.0)
+    prediction = last + velocity * gap
+    prediction_error = float(np.linalg.norm(prediction - candidate))
+    backward_slack = max(0.008, object_size * 0.5)
+    lateral_limit = max(0.025, object_size * 1.5, speed * gap * 0.45)
+    travel_limit = speed * gap * 2.5 + max(0.035, object_size * 2)
+    prediction_limit = max(0.035, 0.025 * gap, object_size * 1.75)
+    return (
+        along >= -backward_slack
+        and along <= travel_limit
+        and lateral <= lateral_limit
+        and prediction_error <= prediction_limit
+    )
 
 
 def run_pipeline(video_path, db_path, metadata, config, profile="balanced", detector=None, report=lambda **kw: None, check=lambda: None):
@@ -40,7 +70,7 @@ def run_pipeline(video_path, db_path, metadata, config, profile="balanced", dete
     detector = detector or create_detector(profile)
     stride = PROFILES[profile]["stride"]
     fps = metadata["fps"]
-    tracker = ByteTracker(fps / stride)
+    tracker = ByteTracker(fps / stride, profile)
     store = TrackStore(db_path)
     cap = cv2.VideoCapture(str(video_path))
     active, aliases = {}, {}
@@ -79,16 +109,29 @@ def run_pipeline(video_path, db_path, metadata, config, profile="balanced", dete
                 tid = aliases.get(raw_id, raw_id)
                 bbox = obj["bbox"]
                 point = np.clip([(bbox[0] + bbox[2]) / (2 * width), bbox[3] / height], 0, 1)
+                normalized_box = [bbox[0] / width, bbox[1] / height, bbox[2] / width, bbox[3] / height]
                 cls = CLASSES[obj["class_id"]]
                 if tid not in active:
-                    candidates = [k for k, t in active.items() if k not in present and can_stitch(t, point, when, cls)]
+                    candidates = [
+                        k
+                        for k, t in active.items()
+                        if k not in present and can_stitch(t, point, when, cls, normalized_box, min(2.5, tracker.buffer_seconds))
+                    ]
                     if len(candidates) == 1:
                         tid = candidates[0]
                         aliases[raw_id] = tid
                         active[tid]["fragments"] += 1
                     else:
                         active[tid] = dict(
-                            id=tid, first_seen=when, last_seen=when, trajectory=[], votes=defaultdict(float), confidence_sum=0, samples=0, fragments=0
+                            id=tid,
+                            first_seen=when,
+                            last_seen=when,
+                            trajectory=[],
+                            votes=defaultdict(float),
+                            confidence_sum=0,
+                            samples=0,
+                            fragments=0,
+                            last_box=normalized_box,
                         )
                 t = active[tid]
                 if t["trajectory"]:
@@ -97,10 +140,10 @@ def run_pipeline(video_path, db_path, metadata, config, profile="balanced", dete
                 t["votes"][cls] += obj["confidence"]
                 t["confidence_sum"] += obj["confidence"]
                 t["samples"] += 1
+                t["last_box"] = normalized_box
                 t["trajectory"].append([float(point[0]), float(point[1]), when])
                 if len(t["trajectory"]) > 512:
                     t["trajectory"] = t["trajectory"][::2] + [t["trajectory"][-1]]
-                normalized_box = [bbox[0] / width, bbox[1] / height, bbox[2] / width, bbox[3] / height]
                 store.observation(when, tid, normalized_box, point.tolist(), obj["confidence"])
                 present.add(tid)
             for tid in list(active):

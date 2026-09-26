@@ -550,6 +550,8 @@ export default function Results({
             Определённых: r.diagnostics.completed_tracks,
             Неопределённых: r.diagnostics.unknown_tracks,
             "Коротких треков исключено": r.diagnostics.discarded_short_tracks,
+            "Неподвижных треков исключено":
+              r.diagnostics.discarded_stationary_tracks ?? 0,
             "Соединённых фрагментов": r.diagnostics.stitched_fragments,
           }).map(([key, v]) => (
             <div key={key}>

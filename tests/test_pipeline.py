@@ -8,12 +8,22 @@ from tests.mock_detector import MockDetector
 
 
 def test_real_tracker_retains_id_through_short_occlusion():
-    tracker = ByteTracker(10)
+    tracker = ByteTracker(10, "accurate")
     ids = []
     for i in range(20):
         detections = [] if i in (8, 9, 10) else [Detection((20 + i, 30, 60 + i, 80), 0, "car", 0.9)]
         rows = tracker.update(detections, (240, 320))
         ids.extend(r["track_id"] for r in rows)
+    assert len(set(ids)) == 1
+
+
+def test_accurate_tracker_can_start_a_low_confidence_distant_vehicle():
+    tracker = ByteTracker(10, "accurate")
+    ids = []
+    for i in range(8):
+        rows = tracker.update([Detection((20 + i, 30, 40 + i, 50), 0, "car", 0.22)], (240, 320))
+        ids.extend(r["track_id"] for r in rows)
+    assert len(ids) >= 5
     assert len(set(ids)) == 1
 
 

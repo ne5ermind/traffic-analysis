@@ -2,7 +2,7 @@ from collections import defaultdict
 import random
 import numpy as np
 from sklearn.cluster import DBSCAN
-from ml.geometry import resample, manual_assignment, line_events
+from ml.geometry import resample, manual_assignment, line_events, meaningful_motion
 from ml.detectors.base import CLASSES
 from ml.topology import assign_path
 
@@ -84,6 +84,9 @@ def classify(store, config, progress=lambda: None):
             else:
                 mid, reliability = classifier.assign(t)
             name = f"{route[0]['label']} → {route[1]['label']}" if route else (f"Направление {mid.split('_')[-1]}" if mid != "unknown" else "Не определено")
+        if t["countable"] and mid == "unknown" and not meaningful_motion(t["trajectory"]):
+            t["countable"] = 0
+            store.db.execute("UPDATE tracks SET countable=0 WHERE id=?", (t["id"],))
         if not t["countable"]:
             mid, name, reliability = "unknown", "Не определено", 0
         store.db.execute(
@@ -114,7 +117,14 @@ def aggregate(store, definitions, duration, interval=900):
         dict(start=start, end=min(start + interval, duration), **{c: 0 for c in CLASSES}, total=0, pedestrians=0)
         for start in range(0, max(1, int(np.ceil(duration))), interval)
     ]
-    diagnostics = dict(tracks=0, completed_tracks=0, unknown_tracks=0, discarded_short_tracks=0, stitched_fragments=0)
+    diagnostics = dict(
+        tracks=0,
+        completed_tracks=0,
+        unknown_tracks=0,
+        discarded_short_tracks=0,
+        discarded_stationary_tracks=0,
+        stitched_fragments=0,
+    )
     confidence_values = []
     for t in store.tracks():
         diagnostics["tracks"] += 1
@@ -122,7 +132,7 @@ def aggregate(store, definitions, duration, interval=900):
         if t["samples"]:
             confidence_values.append(t.get("confidence", 0.0))
         if not t["countable"]:
-            diagnostics["discarded_short_tracks"] += 1
+            diagnostics["discarded_short_tracks" if t["samples"] < 3 else "discarded_stationary_tracks"] += 1
             continue
         cls, mid = t["class_name"], t["movement_id"]
         counts[cls] += 1

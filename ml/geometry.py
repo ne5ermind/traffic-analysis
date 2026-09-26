@@ -115,3 +115,13 @@ def resample(trajectory, n=8):
         return None
     unique = np.r_[True, np.diff(dist) > 1e-8]
     return np.column_stack([np.interp(np.linspace(0, dist[-1], n), dist[unique], points[unique, dim]) for dim in (0, 1)])
+
+
+def meaningful_motion(trajectory):
+    """Reject stable detections and jitter while retaining small distant vehicles."""
+    if len(trajectory) < 3:
+        return False
+    points = np.array([p[:2] for p in trajectory], dtype=float)
+    extent = float(np.linalg.norm(np.ptp(points, axis=0)))
+    direct = float(np.linalg.norm(points[-1] - points[0]))
+    return extent >= 0.018 and (direct >= 0.012 or extent >= 0.04)

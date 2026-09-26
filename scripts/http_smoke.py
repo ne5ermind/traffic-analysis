@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--base-url", default="http://localhost:3000/api")
     parser.add_argument("--output", type=Path, default=Path("data/http-smoke"))
     parser.add_argument("--timeout", type=int, default=1800)
+    parser.add_argument("--profile", choices=("fast", "balanced", "accurate"), default="balanced")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     with httpx.Client(base_url=args.base_url.rstrip("/"), timeout=120) as client:
@@ -35,7 +36,7 @@ def main():
         root = f"/projects/{project['id']}"
         with args.video.open("rb") as video:
             request("POST", root + "/video", files={"file": (args.video.name, video, "video/mp4")})
-        request("POST", root + "/analysis", json={"profile": "balanced"})
+        request("POST", root + "/analysis", json={"profile": args.profile})
         deadline = time.monotonic() + args.timeout
         last = None
         while time.monotonic() < deadline:

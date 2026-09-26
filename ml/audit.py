@@ -98,7 +98,9 @@ def _quality(result, frame_quality):
     detector_confidence = float(diagnostics.get("mean_detection_confidence", 0.0))
     tracks = max(1, int(diagnostics.get("tracks", 0)))
     unknown = int(diagnostics.get("unknown_tracks", 0))
-    discarded = int(diagnostics.get("discarded_short_tracks", 0))
+    discarded_short = int(diagnostics.get("discarded_short_tracks", 0))
+    discarded_stationary = int(diagnostics.get("discarded_stationary_tracks", 0))
+    discarded = discarded_short + discarded_stationary
     sharpness_score = min(1.0, sharpness / 120.0) if frame_quality else 0.65
     brightness_score = max(0.0, 1.0 - abs(brightness - 128.0) / 128.0) if frame_quality else 0.65
     contrast_score = min(1.0, contrast / 64.0) if frame_quality else 0.65
@@ -119,6 +121,7 @@ def _quality(result, frame_quality):
         "detector_confidence": round(detector_confidence, 3),
         "unknown_track_ratio": round(unknown / tracks, 3),
         "discarded_track_ratio": round(discarded / tracks, 3),
+        "discarded_stationary_ratio": round(discarded_stationary / tracks, 3),
         "samples": int(frame_quality.get("samples", 0)),
     }
 
@@ -177,6 +180,13 @@ def audit_result(result, frame_quality=None):
         checks.append({"level": "ok", "message": "Качество кадров и уверенность детектора приемлемы."})
     if video["unknown_track_ratio"] > 0.35:
         checks.append({"level": "warning", "message": "Много траекторий не получили направление; значения оставлены для проверки."})
+    if video["discarded_stationary_ratio"] > 0.2:
+        checks.append(
+            {
+                "level": "warning",
+                "message": "Много неподвижных ложных треков исключено; проверьте дальний план и перекрытия на видео.",
+            }
+        )
     if intersection["type"] == "Конфигурация не определена":
         checks.append({"level": "warning", "message": "Тип перекрёстка не удалось уверенно определить по траекториям."})
     else:
