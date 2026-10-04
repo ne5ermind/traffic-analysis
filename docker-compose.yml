@@ -1,0 +1,64 @@
+name: traffic-analysis
+x-runtime: &runtime
+  image: traffic-analysis-backend:local
+  build: .
+  environment: &environment
+    DATABASE_URL: ${DATABASE_URL:-sqlite:////data/traffic.db}
+    REDIS_URL: redis://redis:6379/0
+    STORAGE_PATH: /data
+    DETECTOR: ${DETECTOR:-yolo}
+    MODEL_PATH: ${MODEL_PATH:-/models/yolo11n.pt}
+    DEVICE: ${DEVICE:-auto}
+    MAX_UPLOAD_GB: ${MAX_UPLOAD_GB:-30}
+    LOCAL_VLM_ENABLED: ${LOCAL_VLM_ENABLED:-false}
+    LOCAL_VLM_URL: ${LOCAL_VLM_URL:-http://host.docker.internal:11434}
+    LOCAL_VLM_SCENE_MODEL: ${LOCAL_VLM_SCENE_MODEL:-qwen3-vl:8b}
+    LOCAL_VLM_MODEL: ${LOCAL_VLM_MODEL:-qwen3.5:9b}
+    LOCAL_VLM_TIMEOUT: ${LOCAL_VLM_TIMEOUT:-600}
+    LOCAL_VLM_FRAMES: ${LOCAL_VLM_FRAMES:-4}
+    CUSTOM_DETECTOR: ${CUSTOM_DETECTOR:-}
+    CLASS_MAP: ${CLASS_MAP:-{}}
+    MODEL_CLASSES: ${MODEL_CLASSES:-["car","truck","bus","motorcycle","bicycle","pedestrian"]}
+  volumes:
+    - traffic-data:/data
+    - ./models:/custom-models:ro
+  restart: unless-stopped
+  depends_on:
+    redis:
+      condition: service_healthy
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    <<: *runtime
+    ports:
+      - '127.0.0.1:8000:8000'
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+  worker:
+    <<: *runtime
+    command: python -m worker
+    stop_grace_period: 30s
+  frontend:
+    build: ./frontend
+    ports:
+      - '127.0.0.1:3000:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  traffic-data:
+  redis-data:
