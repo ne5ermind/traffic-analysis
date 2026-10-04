@@ -1,0 +1,17 @@
+.venv/
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+data/
+.env
+*.pt
+*.onnx
+*.torchscript
+.DS_Store
+frontend/test-results/
+*.tsbuildinfo
+frontend/playwright-report/
+wheelhouse/*
+!wheelhouse/.gitkeep
