@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#071d36">
+  <title>InnovaTransport · Анализ движения</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">Перейти к рабочей области</a>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none"><path d="M8 27 14 5M24 27 18 5M12.4 12h7.2M10.6 19h10.8" stroke="currentColor" stroke-width="2.7" stroke-linecap="round"/><path d="M16 4v24" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="3 4"/></svg>
+      </span>
+      <div><strong>InnovaTransport</strong><small>Аналитика транспортных потоков</small></div>
+    </div>
+    <div class="topbar-actions" aria-label="Состояние системы">
+      <span class="system-badge"><span class="status-dot" aria-hidden="true"></span>Локальный контур</span>
+      <span class="privacy">Видео не покидает устройство</span>
+    </div>
+  </header>
+
+  <main class="app-shell" id="mainContent">
+    <aside class="sidebar" aria-label="Видеозаписи и зоны подсчёта">
+      <div class="sidebar-intro">
+        <span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span>
+        <p class="sidebar-title">Движение под контролем</p>
+        <p>Загрузите запись, выберите способ подсчёта и получите проверяемый отчёт.</p>
+      </div>
+
+      <label class="upload">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span><strong>Загрузить видео</strong><small>Выбрать файл на устройстве</small></span>
+        <input id="upload" type="file" accept=".mp4,.mov,.mkv,.avi,.webm,video/*" aria-describedby="uploadStatus">
+      </label>
+      <p id="uploadStatus" class="sidebar-hint" role="status" aria-live="polite">MP4, MOV, MKV, AVI или WebM</p>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-head"><span class="sidebar-heading">Видеозаписи</span><span aria-hidden="true">01</span></div>
+        <div id="videos" class="list" aria-label="Видеозаписи" aria-live="polite">Загрузка…</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-head"><span class="sidebar-heading">Сохранённые зоны</span><span aria-hidden="true">02</span></div>
+        <div id="scenes" class="list" aria-label="Зоны подсчёта" aria-live="polite">Выберите видео</div>
+      </div>
+
+      <div class="aside-note">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <p>Для анализа нужны веса YOLO и запущенный worker. Все результаты сохраняются локально.</p>
+      </div>
+    </aside>
+
+    <div class="content">
+      <div id="notice" class="notice" role="alert" aria-live="assertive" hidden></div>
+
+      <section class="workspace-head" aria-labelledby="workspaceHeading">
+        <div>
+          <span class="eyebrow">ПАНЕЛЬ АНАЛИТИКА</span>
+          <h1 id="workspaceHeading">Анализ транспортного потока</h1>
+          <p>Один рабочий процесс: источник записи, зона подсчёта и готовый отчёт.</p>
+        </div>
+        <ol class="workflow" aria-label="Этапы работы">
+          <li><span>1</span>Видео</li>
+          <li><span>2</span>Зона</li>
+          <li><span>3</span>Результат</li>
+        </ol>
+      </section>
+
+      <section class="panel viewer-panel" aria-labelledby="videoHeading">
+        <div class="section-head">
+          <div class="section-title">
+            <span class="step-badge" aria-hidden="true">01</span>
+            <div><span class="eyebrow">ИСТОЧНИК</span><h2 id="videoHeading">Видеозапись</h2><p id="videoTitle" class="section-subtitle">Выберите или загрузите видеозапись</p></div>
+          </div>
+          <span id="videoMeta" class="meta"></span>
+        </div>
+        <div class="viewer">
+          <video id="player" controls playsinline preload="metadata" aria-label="Видеозапись для анализа"></video>
+          <canvas id="overlay" role="img" aria-label="Линии подсчёта и обнаруженные объекты" aria-describedby="overlayHint"></canvas>
+          <div id="empty" class="empty">
+            <span class="empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m10 8 6 4-6 4V8Z" fill="currentColor"/><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
+            <strong>Здесь появится видео</strong>
+            <span>Выберите запись в панели слева, чтобы начать</span>
+          </div>
+        </div>
+        <div class="timeline">
+          <button id="playPause" type="button" aria-label="Воспроизвести или приостановить видео" disabled>Воспроизвести</button>
+          <label for="scrub">Позиция видео</label>
+          <input type="range" min="0" max="0" step="0.1" value="0" id="scrub" aria-label="Позиция видео">
+          <output id="timeLabel" for="scrub">0:00</output>
+        </div>
+        <p id="overlayHint" class="viewer-caption">После анализа здесь появятся рамки обнаруженных объектов.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="zoneHeading">
+        <div class="section-head">
+          <div class="section-title">
+            <span class="step-badge" aria-hidden="true">02</span>
+            <div><span class="eyebrow">ПАРАМЕТРЫ ПОДСЧЁТА</span><h2 id="zoneHeading">Как считать объекты?</h2><p class="section-subtitle">Автоматический режим готов к запуску без разметки.</p></div>
+          </div>
+        </div>
+        <div class="mode-switch" role="group" aria-label="Режим подсчёта">
+          <button id="autoMode" type="button" class="selected" aria-pressed="true"><span class="mode-kicker">БЕЗ РАЗМЕТКИ</span><strong>Автоматически</strong><span>Каждый устойчивый трек один раз за анализ</span></button>
+          <button id="manualMode" type="button" aria-pressed="false"><span class="mode-kicker">ТОЧНАЯ ЗОНА</span><strong>По моей зоне</strong><span>Подсчёт проездов после пересечения линий</span></button>
+        </div>
+        <p id="autoDescription" class="mode-info" aria-live="polite">Быстрый режим: одна YOLO11s обрабатывает выбранную частоту кадров (по умолчанию 6 кадров/с), ByteTrack связывает объекты между кадрами. Учитываются пешеходы, велосипеды, легковые автомобили, мотоциклы, автобусы и грузовики.</p>
+
+        <div id="manualConfig" class="manual-config" hidden>
+          <p class="mode-info">Поставьте по две точки для линии въезда и выезда на видео. При необходимости добавьте область интереса и сохраните зону перед анализом.</p>
+          <div class="toolbar" role="group" aria-label="Инструмент разметки">
+            <button data-tool="entry" class="selected" type="button">Линия въезда</button>
+            <button data-tool="exit" type="button">Линия выезда</button>
+            <button data-tool="roi" type="button">Область</button>
+            <button id="finishRoi" type="button">Завершить область</button>
+            <button id="undo" type="button">Отменить точку</button>
+          </div>
+          <div class="formrow point-row">
+            <label>X, %<input id="pointX" type="number" min="0" max="100" step="0.1" value="50" inputmode="decimal"></label>
+            <label>Y, %<input id="pointY" type="number" min="0" max="100" step="0.1" value="50" inputmode="decimal"></label>
+            <button id="addPoint" type="button">Добавить точку по координатам</button>
+          </div>
+          <div class="formrow">
+            <label>Имя линии<input id="lineName" placeholder="Например, Север" value="Север"></label>
+            <label>Название зоны<input id="sceneName" value="Моя зона"></label>
+            <button id="saveScene" type="button" class="primary">Сохранить зону</button>
+          </div>
+          <label class="zone-select">Сохранённая зона<select id="sceneSelect"><option value="">Новая зона</option></select></label>
+          <div id="geometryList" class="chips" aria-live="polite">Линии ещё не заданы</div>
+        </div>
+      </section>
+
+      <section class="panel analysis-panel" aria-labelledby="analysisHeading">
+        <div class="section-head">
+          <div class="section-title">
+            <span class="step-badge" aria-hidden="true">03</span>
+            <div><span class="eyebrow">ОБРАБОТКА И ОТЧЁТ</span><h2 id="analysisHeading">Результаты анализа</h2><p class="section-subtitle">Подсчёт, категории и события сохраняются отдельно для каждого запуска.</p></div>
+          </div>
+          <button id="analyze" type="button" class="primary action" disabled>Запустить анализ</button>
+        </div>
+
+        <div class="formrow settings">
+          <label>Режим обработки<select id="profile"><option value="fast">Быстрый · YOLO11s</option><option value="ensemble">Ансамбль · две YOLO · каждый кадр</option></select></label>
+          <label id="sampleFpsControl">Кадров/с в быстром режиме<input id="sampleFps" type="number" min="2" max="12" step="1" value="6" inputmode="numeric"></label>
+          <label>Схема перекрёстка<select id="topology"><option value="auto">Определить, если возможно</option><option value="three_way">Трёхлучевой / треугольный</option><option value="four_way">Пересекающийся / четыре луча</option></select></label>
+          <label>Интервал графика, мин<input id="interval" type="number" min="1" max="1440" value="15" inputmode="numeric"></label>
+          <button id="refresh" type="button">Обновить результаты</button>
+        </div>
+
+        <div id="runStatus" class="run-status" role="status" aria-live="polite">Выберите запись и запустите анализ.</div>
+        <div class="run-list-head"><h3>История анализов</h3><button id="cancelRun" type="button" class="danger-button" hidden>Остановить анализ</button></div>
+        <div id="runs" class="list run-list" aria-live="polite">Запусков пока нет</div>
+
+        <div id="report" hidden>
+          <div class="report-head"><div><span class="eyebrow">ОБЗОР ПОТОКА</span><h3>Ключевые показатели</h3></div><span id="reportNote" class="meta"></span></div>
+          <div id="summary" class="summary"></div>
+          <div class="charts">
+            <div class="chart-card"><h3>По категориям</h3><div id="categoryChart" class="bar-list"></div></div>
+            <div class="chart-card"><h3>По времени</h3><div id="intervalChart" class="bar-list"></div></div>
+          </div>
+          <div class="chart-card cartogram-card">
+            <div class="section-head"><div><span class="eyebrow">СХЕМА ДВИЖЕНИЯ</span><h3>Картограмма направлений</h3></div><label>Вид узла<select id="cartogramTopology"><option value="auto">Определить, если возможно</option><option value="three_way">Трёхлучевой / треугольный</option><option value="four_way">Пересекающийся / четыре луча</option></select></label></div>
+            <p id="cartogramNote" class="section-subtitle" role="status"></p>
+            <div id="cartogram" class="cartogram"></div>
+            <div id="cartogramTable" class="tablewrap"></div>
+          </div>
+          <div id="routes" class="routes" hidden><h3>Направления движения</h3><div id="routeRows" class="tablewrap"></div></div>
+          <div id="exports" class="export-links" aria-label="Форматы экспорта"><span>Скачать отчёт</span><a id="xlsx" class="linkbutton">Excel</a><a id="csv" class="linkbutton">CSV</a><a id="json" class="linkbutton">JSON</a></div>
+          <div class="run-list-head"><div><h3>Обнаруженные события</h3><p class="section-subtitle">Исправьте класс или отклоните ошибочное обнаружение.</p></div><button id="manual" type="button">Добавить пропущенный объект</button></div>
+          <div class="tablewrap events-table"><table><thead><tr><th>Время</th><th>Категория</th><th>Откуда</th><th>Куда</th><th>Статус</th><th>Действие</th></tr></thead><tbody id="events"></tbody></table></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="eventDialog" aria-labelledby="dialogTitle">
+    <form id="eventForm" method="dialog">
+      <div class="dialog-head"><span class="eyebrow">КОРРЕКТИРОВКА ДАННЫХ</span><h2 id="dialogTitle">Событие</h2><p>Проверьте параметры обнаруженного объекта перед сохранением.</p></div>
+      <input id="eventId" type="hidden"><input id="eventVersion" type="hidden">
+      <div class="grid2">
+        <label>Время, сек<input id="eventTime" type="number" step="0.01" min="0" required></label>
+        <label>Категория<select id="eventCategory"><option value="car">Легковой автомобиль</option><option value="truck">Грузовой автомобиль</option><option value="bus">Автобус</option><option value="motorcycle">Мотоцикл</option><option value="bicycle">Велосипед</option><option value="pedestrian">Пешеход</option></select></label>
+        <label>Откуда<select id="eventFrom"></select></label>
+        <label>Куда<select id="eventTo"></select></label>
+        <label>Статус<select id="eventStatus"><option value="confirmed">Подтверждено</option><option value="review">Проверить</option><option value="auto_accept">Принять автоматически</option><option value="discarded">Отклонено</option></select></label>
+        <label>Причина<input id="eventReason" placeholder="Комментарий к правке"></label>
+      </div>
+      <menu><button value="cancel">Отмена</button><button id="eventSave" class="primary" value="save">Сохранить</button></menu>
+    </form>
+  </dialog>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

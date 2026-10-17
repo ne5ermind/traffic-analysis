@@ -1,0 +1,11 @@
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+python-multipart>=0.0.20,<1
+av>=14,<17
+Pillow>=11,<13
+numpy>=1.26,<3
+openpyxl>=3.1,<4
+ultralytics>=8.3.0,<9
+lap>=0.5.12,<1
+ensemble-boxes>=1.0.9,<2
+supervision>=0.27,<0.28

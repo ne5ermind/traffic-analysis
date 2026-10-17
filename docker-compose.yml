@@ -1,0 +1,17 @@
+services:
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/srv/innova/data
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment:
+      OMP_NUM_THREADS: ${INNOVA_TORCH_THREADS:-4}
+      MKL_NUM_THREADS: ${INNOVA_TORCH_THREADS:-4}
+    volumes:
+      - ./data:/srv/innova/data
+    restart: unless-stopped
