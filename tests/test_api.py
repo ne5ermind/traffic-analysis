@@ -6,7 +6,12 @@ from pathlib import Path
 
 import av
 
-os.environ["INNOVA_DATA"] = tempfile.mkdtemp(prefix="innova-tests-")
+TEST_DATA = Path(tempfile.mkdtemp(prefix="innova-tests-"))
+TEST_MODELS = TEST_DATA / "models"
+TEST_MODELS.mkdir(parents=True)
+for model_name in ("yolo11s.pt", "yolo11m.pt", "yolov10m.pt"):
+    (TEST_MODELS / model_name).touch()
+os.environ["INNOVA_DATA"] = str(TEST_DATA)
 from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
