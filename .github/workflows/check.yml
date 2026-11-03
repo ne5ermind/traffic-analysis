@@ -8,18 +8,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg libgl1 libglib2.0-0
       - run: pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r requirements-dev.txt
       - run: python -m compileall -q app tests scripts
-      - run: pytest -q tests
+      - run: PYTHONPATH=. pytest -q tests
       - run: node --check static/app.js
       - run: docker compose config --quiet
