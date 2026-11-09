@@ -1,0 +1,48 @@
+@startuml
+title TO-BE — как InnovaTransport используется в компании
+
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 15
+skinparam activity {
+  BackgroundColor #E8F1FF
+  BorderColor #2563EB
+  FontColor #172033
+  DiamondBackgroundColor #FFF3CD
+  DiamondBorderColor #D69E2E
+  StartColor #16A085
+  EndColor #16A085
+  BarColor #2563EB
+}
+
+|Компания / заказчик|
+start
+:Нужно узнать транспортную нагрузку\nна перекрёстке или участке дороги;
+
+|Специалист|
+:Получить видео с камеры\nили снять его на месте;
+:Загрузить видео в InnovaTransport;
+
+|InnovaTransport|
+:Автоматически распознать и посчитать\nтранспорт и пешеходов;
+:Разделить объекты по категориям\nи направлениям движения;
+:Подготовить таблицы, диаграммы\nи картограмму;
+
+|Специалист|
+:Проверить готовые результаты;
+if (Результаты требуют уточнения?) then (да)
+  :Исправить отдельные события\nили уточнить зону подсчёта;
+  |InnovaTransport|
+  :Пересчитать показатели\nи обновить отчёт;
+  |Специалист|
+else (нет)
+endif
+:Скачать готовый отчёт;
+
+|Компания / заказчик|
+:Получить понятные данные\nпо транспортным потокам;
+:Использовать их для решений\nпо светофорам, разметке\nи организации движения;
+stop
+
+@enduml
