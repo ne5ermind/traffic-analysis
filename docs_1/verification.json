@@ -1,0 +1,17 @@
+{
+  "date_utc": "2026-10-17",
+  "source": "Automated verification after compact API and Swagger refactor; runtime and accuracy evidence retained from the previous full run",
+  "checks": {
+    "pytest": "PASS: 46 tests",
+    "openapi": "PASS: Swagger UI is available at /docs; /openapi.json exposes 10 public API paths and omits superseded routes",
+    "javascript_syntax": "PASS: node --check static/app.js",
+    "python_compile": "PASS: compileall app tests scripts",
+    "dependency_check": "PASS: pip check reports no broken requirements",
+    "real_model_regression": "PASS: 15 s of Example 1 at 6 FPS produced 24 stable car events from 31 tracks; 7 unstable/static tracks were rejected; the pre-change counter also produced 24 car events on this fragment",
+    "spreadsheet_export": "PASS: 9 sheets; report totals reconcile; the summary and wide direction-by-category report were rendered with LibreOffice for visual inspection",
+    "browser_e2e": "PASS: desktop, mobile portrait and mobile landscape layouts checked; DOM IDs/actions, focus, contrast and responsive states verified",
+    "docker_runtime": "PASS: API and worker recreated from current sources using the cached base image; health endpoint, existing MOV playback, MIME type, byte-range response and report export verified",
+    "real_traffic_accuracy": "LIMITED: the supplied aggregate spreadsheets do not contain frame-level boxes or track IDs, so detector precision/recall, MOTA and IDF1 cannot be measured truthfully without annotated ground truth"
+  },
+  "weight_sha256": "d5ffc1a674953a08e11a8d21e022781b1b23a19b730afc309290bd9fb5305b95"
+}
