@@ -1,0 +1,6 @@
+.venv
+.env
+*.pt
+data/uploads
+data/runs
+START_BASELINE.md
