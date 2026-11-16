@@ -12,6 +12,6 @@
 | [0006](0006-worker-and-sampling.md) | Фоновый worker и выборка кадров | `app/worker.py`, `app/sampling.py` |
 | [0007](0007-geometry-and-counting.md) | Геометрия и подсчёт | `app/geometry.py` |
 | [0008](0008-cartogram-and-reports.md) | Картограмма и отчёты | `app/cartogram.py`, `app/main.py` |
-| [0009](0009-static-frontend.md) | Статический frontend | `static/` |
+| [0009](0009-react-frontend.md) | Модульный frontend на React | `frontend/`, `static/` |
 
 Новые решения добавляются отдельным файлом; принятые ADR не переписываются задним числом.

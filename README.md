@@ -2,6 +2,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)](https://react.dev/)
 [![Computer Vision](https://img.shields.io/badge/CV-YOLO11%20%2B%20ByteTrack-4F46E5)](https://docs.ultralytics.com/)
 [![CI](https://github.com/ne5ermind/traffic-analysis/actions/workflows/check.yml/badge.svg)](https://github.com/ne5ermind/traffic-analysis/actions/workflows/check.yml)
 
@@ -63,14 +64,15 @@ FastAPI ───── SQLite
 Worker ── YOLO11 / WBF ── ByteTrack ── подсчёт ── картограмма
 ```
 
-Проект реализован как компактный модульный монолит: API и интерфейс обслуживаются FastAPI, длительная обработка выполняется отдельным worker-процессом, а состояние хранится в SQLite.
+Проект реализован как компактный модульный монолит: FastAPI обслуживает API и собранное React-приложение, длительная обработка выполняется отдельным worker-процессом, а состояние хранится в SQLite. Исходный код интерфейса разделён на компоненты, хуки, API-клиент и общие утилиты.
 
 ## 📁 Структура репозитория
 
 ```text
 traffic-analysis/
 ├── app/                 # API, хранение, CV pipeline и worker
-├── static/              # интерфейс без отдельного frontend-сервера
+├── frontend/            # React-компоненты, хуки и Vite-конфигурация
+├── static/              # production-сборка интерфейса для FastAPI
 ├── tests/               # API, геометрия, CV, экспорт и sampling
 ├── scripts/             # загрузка весов, smoke и benchmark
 ├── data/models/         # локальные веса моделей, не входят в Git
@@ -111,13 +113,15 @@ docker compose up --build
 
 ### Запуск без Docker
 
-Нужны Python 3.11+ и системные зависимости FFmpeg/OpenCV.
+Нужны Python 3.11+, Node.js 22.12+ и системные зависимости FFmpeg/OpenCV.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
+npm ci --prefix frontend
+npm run build --prefix frontend
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -148,7 +152,8 @@ python -m app.worker
 ```bash
 PYTHONPATH=. .venv/bin/pytest -q tests
 .venv/bin/python -m compileall -q app tests scripts
-node --check static/app.js
+npm ci --prefix frontend
+npm run build --prefix frontend
 docker compose config --quiet
 ```
 

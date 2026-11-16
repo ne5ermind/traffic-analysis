@@ -1,5 +1,6 @@
 .venv
 .env
+frontend/node_modules/
 *.pt
 data/uploads
 data/runs

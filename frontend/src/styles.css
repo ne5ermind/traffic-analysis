@@ -27,6 +27,7 @@
 * {box-sizing: border-box}
 html {scroll-behavior: smooth}
 body {margin: 0; background: #f4f7fb; color: var(--ink); -webkit-font-smoothing: antialiased}
+#root {min-height: 100vh}
 button, input, select {font: inherit}
 button, .upload, .linkbutton {cursor: pointer}
 button:disabled {cursor: not-allowed; opacity: .55}
@@ -456,9 +457,4 @@ menu {display: flex; justify-content: flex-end; gap: 10px; margin: 0; padding: 0
 @media (prefers-reduced-motion: reduce) {
   html {scroll-behavior: auto}
   *, *::before, *::after {scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important}
-}
-
-
-.body {
-    background-color: 'gray';
 }
