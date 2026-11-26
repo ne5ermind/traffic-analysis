@@ -3,12 +3,11 @@ import argparse
 import fcntl
 import json
 import math
-import os
 import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from .geometry import PassageCounter, UniqueTrackCounter
+from .geometry import PassageCounter, UniqueTrackCounter, inside
 from .sampling import FrameSampler, budgeted_fps
 from .storage import ROOT, connection, init, resolve_data_path, resolve_model_path
 
@@ -63,8 +62,19 @@ def claim():
 
 
 def run(job):
-    import av
+    return _run_local(job)
 
+
+def _run_local(job):
+    import av
+    from .runtime import configure_runtime
+    from .vision.frames import PrefetchFrames
+    from .vision.lighting import LowLightProcessor
+    from .clustering import cluster_tracks
+
+    settings = configure_runtime()
+    configuration = json.loads(job["model"]) if job["model"].startswith("{") else {}
+    lighting = LowLightProcessor(configuration.get("lighting", "day"))
     with connection() as db:
         video = db.execute("SELECT * FROM videos WHERE id=?", (job["video_id"],)).fetchone()
         if not video:
@@ -72,6 +82,7 @@ def run(job):
         video = dict(video)
     geometry = json.loads(job["geometry"])
     automatic = geometry.get("mode") == "automatic"
+    counting_roi = geometry.get("roi", []) if automatic else []
     if automatic:
         counter = UniqueTrackCounter()
     else:
@@ -105,8 +116,12 @@ def run(job):
         if not weights.is_file():
             raise FileNotFoundError(f"Нет весов модели: {weights}. Скопируйте yolo11m.pt в data/models/.")
         model = load_yolo(weights)
+    if ensemble and configuration.get("night_model"):
+        from .model import load_yolo
+        processor.night_model = load_yolo(resolve_model_path(configuration["night_model"]))
     container = av.open(str(resolve_data_path(video["path"])))
     stream = container.streams.video[0]
+    stream.codec_context.thread_count = settings["decode_threads"]
     total = max(video["duration"] or 0, 0.001)
     diagnostics = ROOT / "runs" / job["id"]
     diagnostics.mkdir(parents=True, exist_ok=True)
@@ -136,9 +151,10 @@ def run(job):
         return False
 
     frame_index = {}
-    with (diagnostics / "trajectories.jsonl").open("w", encoding="utf-8") as traces, \
+    with PrefetchFrames(container, stream, settings["prefetch_frames"]) as decoded, \
+         (diagnostics / "trajectories.jsonl").open("w", encoding="utf-8") as traces, \
          (diagnostics / "detections.jsonl").open("wb") as frames_file:
-        for frame_num, frame in enumerate(container.decode(stream)):
+        for frame_num, frame in enumerate(decoded):
             decoded_frames += 1
             raw_pts = (float(frame.pts * frame.time_base) if frame.pts is not None
                        else frame_num / float(video["fps"] or 25))
@@ -149,10 +165,11 @@ def run(job):
             pts = max(0.0, raw_pts - timestamp_origin)
             if sampler is not None and not sampler.accept(pts):
                 if update_progress(pts):
-                    container.close()
                     return
                 continue
-            image = frame.to_ndarray(format="bgr24")
+            image, dark = lighting.process(frame.to_ndarray(format="bgr24"))
+            if ensemble:
+                processor.use_night = dark
             processed_frames += 1
             if first_sample_pts is None:
                 first_sample_pts = pts
@@ -192,10 +209,14 @@ def run(job):
                 anchor = ((x1 + x2) / (2 * frame.width), y2 / frame.height)
                 seen_tracks.add(identity)
                 path = track_paths.setdefault(str(identity), {"start": anchor, "first_s": pts,
-                                                            "end": anchor, "last_s": pts, "seen": 0})
+                                                            "end": anchor, "last_s": pts, "seen": 0, "points": []})
                 path["end"] = anchor
                 path["last_s"] = pts
                 path["seen"] += 1
+                if not path["points"] or math.dist(anchor, path["points"][-1]) >= 0.005:
+                    path["points"].append(anchor)
+                    if len(path["points"]) > 256:
+                        path["points"] = path["points"][::2] + [anchor]
                 objects.append({"id": identity, "tracker_id": identity, "class_id": class_id,
                                 "category": category, "xyxy": [x1, y1, x2, y2],
                                 "box": [round(x1 / frame.width, 5), round(y1 / frame.height, 5),
@@ -206,6 +227,8 @@ def run(job):
                                          "point": anchor, "box": [x1, y1, x2, y2],
                                          "confidence": confidence}, ensure_ascii=False) + "\n")
                 box_size = ((x2 - x1) / frame.width, (y2 - y1) / frame.height)
+                if counting_roi and not inside(anchor, counting_roi):
+                    continue
                 for event in counter.feed(
                         identity, anchor, pts, category, confidence, box_size=box_size):
                     details = {"trail": event["trail"]}
@@ -238,10 +261,17 @@ def run(job):
                                    (f"Для соблюдения времени частота анализа снижена до "
                                     f"{effective_fps:g} кадр/с. Короткие объекты могут быть пропущены.", job["id"]))
             if update_progress(pts):
-                container.close()
                 return
     container.close()
-    for name, data in (("detections-index.json", frame_index), ("tracks.json", track_paths)):
+    elapsed = max(0.001, time.monotonic() - started_wall)
+    performance = {"elapsed_s": elapsed, "video_seconds": video["duration"],
+                   "processed_frames": processed_frames, "decoded_frames": decoded_frames,
+                   "inference_fps": processed_frames / elapsed, "runtime": settings,
+                   "lighting": lighting.mode, "enhanced_frames": lighting.enhanced_frames,
+                   "night_model": configuration.get("night_model"),
+                   "effective_sample_fps": effective_fps}
+    for name, data in (("detections-index.json", frame_index), ("tracks.json", track_paths),
+                       ("clusters.json", cluster_tracks(track_paths)), ("performance.json", performance)):
         temporary = diagnostics / (name + ".tmp")
         temporary.write_text(json.dumps(data), encoding="utf-8")
         temporary.replace(diagnostics / name)

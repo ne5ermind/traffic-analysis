@@ -1,187 +1,109 @@
-# InnovaTransport — анализ транспортных потоков
+# InnovaTransport
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Computer Vision](https://img.shields.io/badge/CV-YOLO11%20%2B%20ByteTrack-4F46E5)](https://docs.ultralytics.com/)
-[![CI](https://github.com/ne5ermind/traffic-analysis/actions/workflows/check.yml/badge.svg)](https://github.com/ne5ermind/traffic-analysis/actions/workflows/check.yml)
+Локальный анализ транспортных и пешеходных потоков: загрузка видео, YOLO + ByteTrack, зоны/линии подсчёта, кластеры направлений, дневная и ночная обработка, проверка событий и экспорт. Интерфейс написан на React. Backend — модульный монолит FastAPI/SQLite; обработчик видео работает отдельным процессом.
 
-Локальный сервис для автоматического подсчёта транспорта и пешеходов по видеозаписям. InnovaTransport обнаруживает и сопровождает объекты, считает потоки по всему кадру или пользовательской зоне, помогает проверить спорные события и формирует отчёты в JSON, CSV и XLSX.
+## Запуск
 
-> Видео, результаты и база SQLite остаются на устройстве пользователя. Внешняя передача исходных записей не требуется.
-
----
-
-## 📌 О проекте
-
-Ручной подсчёт транспортных потоков занимает много времени и плохо масштабируется. InnovaTransport объединяет полный рабочий цикл в одном интерфейсе:
-
-1. загрузка видеозаписи;
-2. настройка режима и зоны подсчёта;
-3. запуск анализа;
-4. детекция и трекинг объектов;
-5. проверка событий и картограммы;
-6. экспорт воспроизводимого отчёта.
-
-Система рассчитана на учебные и исследовательские сценарии анализа перекрёстков, транспортных узлов и пешеходных потоков.
-
-## 🎯 Возможности
-
-- загрузка MP4, MOV, MKV, AVI и WebM;
-- быстрый режим **YOLO11s + ByteTrack** и ансамбль двух моделей с WBF;
-- распознавание пешеходов, велосипедов, автомобилей, мотоциклов, автобусов и грузовиков;
-- автоматический подсчёт устойчивых треков или подсчёт проездов через заданную зону;
-- сохранение рамок, траекторий и истории запусков;
-- ручное подтверждение, отклонение и исправление событий;
-- KPI, диаграммы, матрица направлений и картограмма;
-- экспорт результатов в JSON, CSV и XLSX;
-- локальное хранение данных и русскоязычный интерфейс.
-
-## 🧭 Рабочий процесс
-
-| Этап | Что происходит | Результат |
-|---|---|---|
-| 1. Видео | Пользователь загружает запись | Файл и метаданные появляются в каталоге |
-| 2. Режим | Выбирается автоматический анализ или пользовательская зона | Зафиксирована геометрия подсчёта |
-| 3. Анализ | Worker обрабатывает выбранные кадры | Детекции, треки и прогресс сохраняются |
-| 4. Проверка | Пользователь проверяет найденные события | Подтверждённый набор данных |
-| 5. Визуализация | Строятся KPI, графики и картограмма | Понятное представление потока |
-| 6. Экспорт | Формируется JSON, CSV или XLSX | Переносимый отчёт |
-
-## 🧩 Архитектура
-
-```text
-Браузер
-   │
-   ▼
-FastAPI ───── SQLite
-   │             │
-   ├── API       ├── видео и сцены
-   ├── статика   ├── запуски
-   └── экспорт   └── события и ревизии
-   │
-   ▼
-Worker ── YOLO11 / WBF ── ByteTrack ── подсчёт ── картограмма
-```
-
-Проект реализован как компактный модульный монолит: API и интерфейс обслуживаются FastAPI, длительная обработка выполняется отдельным worker-процессом, а состояние хранится в SQLite.
-
-## 📁 Структура репозитория
-
-```text
-traffic-analysis/
-├── app/                 # API, хранение, CV pipeline и worker
-├── static/              # интерфейс без отдельного frontend-сервера
-├── tests/               # API, геометрия, CV, экспорт и sampling
-├── scripts/             # загрузка весов, smoke и benchmark
-├── data/models/         # локальные веса моделей, не входят в Git
-├── docs/                # требования, диаграммы, ADR и контракты задач
-├── docker-compose.yml
-├── Dockerfile
-└── requirements.txt
-```
-
-## 🚀 Быстрый запуск
-
-### 1. Клонировать репозиторий
-
-```bash
-git clone https://github.com/ne5ermind/traffic-analysis.git
-cd traffic-analysis
-```
-
-### 2. Скачать веса быстрого режима
+Нужны Docker Compose и локальные веса. Скачивание зависимостей и весов выполняется при подготовке; обработка видео не использует внешние сервисы.
 
 ```bash
 python3 scripts/fetch_weights.py --model yolo11s.pt
+docker compose up --build -d
 ```
 
-Для ансамбля:
+Открыть [приложение](http://127.0.0.1:8000) и [Swagger](http://127.0.0.1:8000/docs). Порт доступен только на localhost. Данные сохраняются в `data/`. Compose выделяет API 1 CPU, worker 3 CPU: общий бюджет — 4 CPU. У worker два потока PyTorch, один поток декодера и очередь не более четырёх кадров; состояние трекера обрабатывается строго по времени.
+
+Ансамбль требует дополнительных локальных весов:
 
 ```bash
 python3 scripts/fetch_weights.py --ensemble
 ```
 
-### 3. Запустить через Docker Compose
+### Без Docker
+
+Python 3.11/3.12, Node.js 20+, FFmpeg и системные зависимости OpenCV:
 
 ```bash
-docker compose up --build
-```
-
-Откройте [http://127.0.0.1:8000](http://127.0.0.1:8000). Swagger доступен по адресу [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
-
-### Запуск без Docker
-
-Нужны Python 3.11+ и системные зависимости FFmpeg/OpenCV.
-
-```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
+npm ci
+npm run build
+python scripts/fetch_weights.py --model yolo11s.pt
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Во втором терминале:
+В другом терминале с тем же окружением:
 
 ```bash
-source .venv/bin/activate
 python -m app.worker
 ```
 
-## 🔌 Основные API-маршруты
+После изменения React-кода выполните `npm run build`. FastAPI раздаёт локально собранный JS/CSS; CDN не нужен. `INNOVA_DATA` позволяет задать другой каталог данных. По умолчанию используется CPU; `INNOVA_DEVICE=mps` включает доступный ускоритель Mac явно. Отсутствующие веса приводят к понятной ошибке, а не скачиванию во время анализа.
 
-| Метод | Маршрут | Назначение |
-|---|---|---|
-| `POST` | `/api/videos` | загрузить видеозапись |
-| `GET` | `/api/videos/{id}/media` | получить видео или preview |
-| `POST` | `/api/scenes` | сохранить зону подсчёта |
-| `POST` | `/api/runs` | запустить анализ |
-| `GET` | `/api/runs/{id}/results` | получить KPI, события и картограмму |
-| `PATCH` | `/api/runs/{id}` | отменить запуск или сменить topology |
-| `POST/PATCH` | `/api/runs/{id}/events` | добавить или исправить событие |
-| `GET` | `/api/runs/{id}/export/{format}` | скачать JSON, CSV или XLSX |
+## Рабочий сценарий
 
-Полная интерактивная схема доступна в Swagger после запуска приложения.
+1. Загрузить MP4/MOV/MKV/AVI/WebM и выбрать запись.
+2. Оставить автоматический подсчёт либо задать линии въезда/выезда и ROI мышью или координатами. Зоны можно сохранить и открыть повторно; изменения сохраняются новой сценой, чтобы не менять старый результат.
+3. Выбрать быстрый режим или ансамбль, частоту кадров и освещение. Для тёмного видео доступны night и auto. Отдельные ночные веса при наличии указываются именем файла в `data/models/`.
+4. Запустить анализ. История и прогресс обновляются автоматически; анализ можно остановить. При исчезновении heartbeat интерфейс показывает явную ошибку не позднее пяти минут с учётом интервала опроса.
+5. Проверить видео с рамками, категории, события, картограмму и кластеры. Исправление события защищено версией; устаревшая правка возвращает 409. По необходимости добавить пропущенный объект.
+6. Скачать XLSX/CSV/JSON. JSON и XLSX включают кластеры; XLSX содержит также производительность. CSV сохраняет совместимую таблицу направлений.
+7. Загрузить независимый эталон и получить метрики по [описанному протоколу](docs/RESEARCH_AND_EVALUATION.md).
 
-## ✅ Проверка проекта
+Ночной baseline — коррекция L-канала + обычный детектор. Это не обученная специализированная ночная модель. Поддержаны её подключение, нормализация классов и обучение командой `python scripts/train_night.py --data /path/to/dataset.yaml`. Для обучения и измерения точности необходим размеченный ночной набор.
+
+## Модули
+
+```text
+app/main.py              сборка приложения
+app/api/media.py         загрузка и воспроизведение
+app/api/counting.py      сцены и линии
+app/api/analysis.py      очередь и управление запусками
+app/api/results.py       события, ревизии, агрегация, overlay
+app/api/reports.py        CSV/XLSX/JSON
+app/api/evaluation.py     загрузка эталона и оценка
+app/api/schemas.py       валидируемые контракты
+app/worker.py            оркестрация обработки
+app/vision/frames.py     ограниченная очередь декодирования
+app/vision/lighting.py   ночная обработка
+app/ensemble.py          детекция и постоянный ByteTrack
+app/geometry.py          ROI, пересечения и подсчёт
+app/clustering.py        DBSCAN направленных траекторий
+app/evaluation.py        метрики без зависимости от HTTP
+app/storage.py           переносимые пути и SQLite/WAL
+frontend/hooks/          загрузка состояния и опрос API
+frontend/components/     видео, конфигурация, результаты, редактор
+```
+
+В OpenAPI сохранены 10 согласованных API-путей. `GET /api/runs/{id}/results` возвращает summary, events, cartogram, clusters и performance; `view` позволяет запросить раздел отдельно. Сохранённые видео/события старых локальных YOLO-запусков читаются без миграции схемы. Для старых запусков кластеры отсутствуют до нового анализа. Данные API и путей остаются совместимыми с прежними контрактами команды.
+
+## Проверки
 
 ```bash
-PYTHONPATH=. .venv/bin/pytest -q tests
-.venv/bin/python -m compileall -q app tests scripts
-node --check static/app.js
+pytest -q tests
+python -m compileall -q app tests scripts
+npm run build
 docker compose config --quiet
 ```
 
-Тесты покрывают API, загрузку видео, геометрию зон, выборку кадров, детекцию, трекинг, события, картограмму и экспорт.
+Браузерный smoke на изолированных данных:
 
-## 👥 Команда и зоны ответственности
+```bash
+INNOVA_DATA=/tmp/innova-ui python scripts/seed_ui.py
+INNOVA_DATA=/tmp/innova-ui uvicorn app.main:app --port 8017
+# отдельный терминал
+npm run test:ui
+```
 
-| Участник | Зона | Issues |
-|---|---|---|
-| [@ne5ermind](https://github.com/ne5ermind) | загрузка, каталог и проигрывание видео | [#43](https://github.com/ne5ermind/traffic-analysis/issues/43), [#44](https://github.com/ne5ermind/traffic-analysis/issues/44) |
-| [@Gov1-10dav](https://github.com/Gov1-10dav) | очередь, прогресс и отмена анализа | [#45](https://github.com/ne5ermind/traffic-analysis/issues/45), [#46](https://github.com/ne5ermind/traffic-analysis/issues/46) |
-| [@skillshifting](https://github.com/skillshifting) | детекция, трекинг и video overlay | [#47](https://github.com/ne5ermind/traffic-analysis/issues/47), [#48](https://github.com/ne5ermind/traffic-analysis/issues/48) |
-| [@qqqquinke](https://github.com/qqqquinke) | зоны подсчёта и проверка событий | [#49](https://github.com/ne5ermind/traffic-analysis/issues/49), [#50](https://github.com/ne5ermind/traffic-analysis/issues/50) |
-| [@zhorarichka-a11y](https://github.com/zhorarichka-a11y) | агрегация, картограмма и экспорт | [#51](https://github.com/ne5ermind/traffic-analysis/issues/51), [#52](https://github.com/ne5ermind/traffic-analysis/issues/52) |
+На Linux сначала `npx playwright install --with-deps chromium`. Smoke использует тестовую завершённую запись и проверяет зоны, редактирование событий, экспорт и responsive layout. Данные seed синтетические и не являются тестом качества модели.
 
-## 📚 Документация
+Полный benchmark, без экстраполяции:
 
-| Документ | Содержание |
-|---|---|
-| [AS-IS](./docs/AS-IS.md) | исходный процесс ручного анализа |
-| [Упрощённая TO-BE](./docs/TO-BE-COMPANY.md) | целевой процесс для компании и заказчика |
-| [Функциональные требования](./docs/FR.md) | требования ФТ-1 — ФТ-10 |
-| [Нефункциональные требования](./docs/NFR.md) | производительность, надёжность, безопасность и качество |
-| [Реестр требований](./docs/REQUIREMENTS.md) | требования, способы проверки и критерии приёмки |
-| [Гипотезы и риски](./docs/Hypotises_and_Risks.md) | проверяемые предположения и ограничения |
-| [Таблица предположений](./docs/Таблица_предположений.md) | статус и способ проверки предположений |
-| [Стейкхолдеры](./docs/Таблица_стейкхолдеров.md) | роли, влияние и интерес участников |
-| [ADR](./docs/adr/README.md) | принятые архитектурные решения |
-| [Контракты задач](./docs/contracts/) | интерфейсы и критерии приёмки issues #43–52 |
+```bash
+INNOVA_DATA=/path/to/empty-benchmark-data python scripts/benchmark_full.py /path/to/15-minute-video.mp4 --lighting night
+```
 
-## ⚠️ Ограничения метода
+Скопируйте веса в `models/` выбранного каталога. Для приёмки NF-01 выполняйте этот скрипт внутри Docker с тем же лимитом worker `--cpus=3`, резервируя 1 CPU для API. Скрипт требует видео ≥900 секунд, измеряет весь запуск включая загрузку модели и сохраняет JSON с параметрами среды.
 
-Точность зависит от ракурса камеры, освещения, окклюзий, частоты выборки кадров и качества трекинга. Автоматический режим считает уникальные устойчивые треки во всём кадре; пользовательская зона считает проезды через заданные границы. Эти показатели нельзя напрямую сравнивать без одинаковой области наблюдения и правил разметки.
-
-Проект не заменяет сертифицированную систему транспортного мониторинга. Для оценки качества на новых данных необходима отдельная размеченная выборка.
-
+Результаты проверки: [VERIFICATION.md](docs/VERIFICATION.md). Требования: [FR](docs/FR.md), [NFR](docs/NFR.md), [реестр](docs/REQUIREMENTS.md). Методы, ограничения и научные источники: [RESEARCH_AND_EVALUATION.md](docs/RESEARCH_AND_EVALUATION.md).

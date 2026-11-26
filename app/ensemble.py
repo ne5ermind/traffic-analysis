@@ -1,5 +1,6 @@
 """COCO YOLO detections -> optional WBF -> one persistent ByteTrack."""
 from math import ceil, isfinite
+import os
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,8 @@ import supervision as sv
 from ensemble_boxes import weighted_boxes_fusion
 
 from .model import load_yolo
+
+CLASS_BY_NAME = {"person": 0, "pedestrian": 0, "bicycle": 1, "car": 2, "motorcycle": 3, "bus": 5, "truck": 7}
 
 TARGET_CLASSES = (0, 1, 2, 3, 5, 7)  # person, bicycle, car, motorcycle, bus, truck
 
@@ -18,6 +21,28 @@ DETECTION_CONFIDENCE = 0.10
 TRACK_ACTIVATION_THRESHOLD = 0.25
 NMS_IOU_THRESHOLD = 0.70
 TRACK_MEMORY_SECONDS = 1.0
+
+
+def target_classes(model):
+    names = getattr(model, "names", None)
+    if isinstance(names, (dict, list)):
+        entries = names.items() if isinstance(names, dict) else enumerate(names)
+        selected = [int(key) for key, name in entries if str(name).lower() in CLASS_BY_NAME]
+        if not selected:
+            raise ValueError("Модель не содержит поддерживаемых классов транспорта и пешеходов")
+        return selected
+    return list(TARGET_CLASSES)
+
+
+def inference_device() -> str:
+    """Use the Mac accelerator when available, including in the worker process."""
+    import torch
+    device = os.getenv("INNOVA_DEVICE", "cpu")
+    if device == "mps" and not torch.backends.mps.is_available():
+        raise ValueError("Ускоритель MPS недоступен; выберите INNOVA_DEVICE=cpu")
+    if device not in ("cpu", "mps", "cuda"):
+        raise ValueError("INNOVA_DEVICE должен быть cpu, mps или cuda")
+    return device
 
 
 def _frame_size(frame: np.ndarray) -> tuple[int, int]:
@@ -38,6 +63,12 @@ def _validated_detections(result, width: int, height: int) -> sv.Detections:
     xyxy = np.asarray(boxes.xyxy.cpu().numpy(), dtype=np.float32)
     scores = np.asarray(boxes.conf.cpu().numpy(), dtype=np.float32).reshape(-1)
     raw_classes = np.asarray(boxes.cls.cpu().numpy(), dtype=np.float32).reshape(-1)
+    names = getattr(result, "names", None)
+    if isinstance(names, (dict, list)):
+        names = dict(enumerate(names)) if isinstance(names, list) else names
+        raw_classes = np.asarray([CLASS_BY_NAME.get(str(names.get(int(value), "")).lower(), -1)
+                                  if np.isfinite(value) and float(value).is_integer() else -1
+                                  for value in raw_classes], dtype=np.float32)
     if xyxy.ndim != 2 or xyxy.shape[1] != 4:
         return sv.Detections.empty()
     count = min(len(xyxy), len(scores), len(raw_classes))
@@ -101,6 +132,7 @@ class FastFrameProcessor:
             model = load_yolo(weights)
         self.model = model
         self.image_size = image_size
+        self.device = inference_device()
         self.tracker = tracker if tracker is not None else _new_tracker(fps)
 
     def set_frame_rate(self, fps: float) -> None:
@@ -109,9 +141,10 @@ class FastFrameProcessor:
 
     def process_frame(self, frame: np.ndarray) -> sv.Detections:
         width, height = _frame_size(frame)
-        result = self.model.predict(
+        model = getattr(self, "night_model", None) if getattr(self, "use_night", False) else None
+        result = (model or self.model).predict(
             frame, imgsz=self.image_size, conf=DETECTION_CONFIDENCE,
-            iou=NMS_IOU_THRESHOLD, classes=list(TARGET_CLASSES), verbose=False,
+            iou=NMS_IOU_THRESHOLD, classes=target_classes(model or self.model), device=self.device, verbose=False,
         )[0]
         detections = _validated_detections(result, width, height)
         return self.tracker.update_with_detections(detections)
@@ -139,15 +172,17 @@ class EnsembleFrameProcessor:
         if len(models) != 2:
             raise ValueError("Ансамблю нужны ровно две модели")
         self.models = models
+        self.device = inference_device()
         self.tracker = tracker if tracker is not None else _new_tracker(fps)
 
     def process_frame(self, frame: np.ndarray) -> sv.Detections:
         width, height = _frame_size(frame)
         boxes_list, scores_list, labels_list = [], [], []
-        for model in self.models:
+        night_model = getattr(self, "night_model", None) if getattr(self, "use_night", False) else None
+        for model in ((night_model,) if night_model is not None else self.models):
             result = model.predict(
                 frame, conf=DETECTION_CONFIDENCE, iou=NMS_IOU_THRESHOLD,
-                classes=list(TARGET_CLASSES), verbose=False,
+                classes=target_classes(model), device=self.device, verbose=False,
             )[0]
             detections = _validated_detections(result, width, height)
             scale = np.asarray([width, height, width, height], dtype=np.float32)

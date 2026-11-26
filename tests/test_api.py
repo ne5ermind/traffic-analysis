@@ -7,12 +7,6 @@ from pathlib import Path
 import av
 
 os.environ["INNOVA_DATA"] = tempfile.mkdtemp(prefix="innova-tests-")
-# The production weights are intentionally ignored by Git. Empty fixtures are
-# sufficient here because the tests replace inference with deterministic fakes.
-for model_name in ("yolo11m.pt", "yolo11s.pt"):
-    model_path = Path(os.environ["INNOVA_DATA"]) / "models" / model_name
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    model_path.touch()
 from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -53,7 +47,9 @@ def test_swagger_exposes_only_compact_public_api():
 
 def test_upload_scene_manual_review_export_and_reference():
     with TestClient(app) as client:
-        assert client.get("/api/health").json() == {"ok": True}
+        health = client.get("/api/health").json()
+        assert health["ok"] is True
+        assert health["runtime"]["cpu_budget"] == 4
         r = client.post("/api/videos", files={"file": ("test.mp4", video_bytes(), "video/mp4")})
         assert r.status_code == 200, r.text
         vid = r.json()["id"]
@@ -99,7 +95,11 @@ def test_upload_scene_manual_review_export_and_reference():
         assert counts["A1"].fill.fgColor.rgb.endswith("0B1F3A")
         assert book["Flow Matrix"]["D2"].value == 1
         assert book["Cartogram coverage"]["A2"].value == "topology"
-        assert client.get(f"/api/runs/{run_id}/export/json").json()["cartogram"]["total"] == 1
+        assert book["Кластеры"]["A2"].value == "unresolved"
+        json_export = client.get(f"/api/runs/{run_id}/export/json").json()
+        assert json_export["cartogram"]["total"] == 1
+        assert json_export["clusters"]["unresolved_events"] == 1
+        assert json_export["performance"] is None
         gt = client.post(f"/api/videos/{vid}/ground-truth", files={"file": (
             "reference.csv", b"from,to,category,count\nN,S,bus,1\n", "text/csv")})
         assert gt.status_code == 200, gt.text
@@ -135,8 +135,10 @@ def test_video_paths_survive_docker_prefix_changes_and_keep_media_type():
 
 
 def test_model_resolver_rebinds_legacy_prefix_but_rejects_external_files(tmp_path):
-    from app.storage import resolve_model_path
+    from app.storage import ROOT, resolve_model_path
 
+    (ROOT / "models").mkdir(parents=True, exist_ok=True)
+    (ROOT / "models" / "yolo11s.pt").write_bytes(b"test weights placeholder")
     legacy = resolve_model_path("/srv/innova/data/models/yolo11s.pt")
     assert legacy.is_file() and legacy.name == "yolo11s.pt"
     external = tmp_path / "external.pt"
@@ -148,7 +150,10 @@ def test_model_resolver_rebinds_legacy_prefix_but_rejects_external_files(tmp_pat
 
 def test_automatic_run_counts_and_saved_boxes_without_manual_lines(monkeypatch):
     from app.worker import run as process
-    from app.storage import connection
+    from app.storage import ROOT, connection
+
+    (ROOT / "models").mkdir(parents=True, exist_ok=True)
+    (ROOT / "models" / "yolo11m.pt").write_bytes(b"test weights placeholder")
 
     class Scalar:
         def __init__(self, value):
@@ -225,6 +230,47 @@ def test_automatic_run_counts_and_saved_boxes_without_manual_lines(monkeypatch):
         assert edited_scene.status_code == 200, edited_scene.text
         assert client.get(f"/api/runs/{run_id}/results?view=summary").json()["geometry"]["mode"] == "automatic"
         assert client.get(f"/api/runs/{run_id}/results?view=summary").json()["total"] == 3
+
+
+def test_automatic_roi_limits_count_but_keeps_full_frame_detections(monkeypatch):
+    import numpy as np
+    import supervision as sv
+    from app.worker import run as process
+    from app.storage import connection
+
+    class Processor:
+        def __init__(self, weights, fps, image_size):
+            self.frame = 0
+
+        def process_frame(self, frame):
+            offset = min(self.frame, 4)
+            self.frame += 1
+            detections = sv.Detections(
+                xyxy=np.array([[3 + offset, 3, 12 + offset, 24],
+                               [24 + offset, 3, 29 + offset, 24]], dtype=np.float32),
+                confidence=np.array([.9, .9], dtype=np.float32),
+                class_id=np.array([2, 2], dtype=np.int64))
+            detections.tracker_id = np.array([1, 2], dtype=np.int64)
+            return detections
+
+    monkeypatch.setattr("app.ensemble.FastFrameProcessor", Processor)
+    with TestClient(app) as client:
+        video = client.post("/api/videos", files={"file": ("roi.mp4", video_bytes(), "video/mp4")}).json()
+        geometry = {"mode": "automatic", "entries": [], "exits": [],
+                    "roi": [[0, 0], [.6, 0], [.6, 1], [0, 1]]}
+        assert client.post("/api/scenes", json={"video_id": video["id"], "name": "bad",
+            "geometry": {**geometry, "roi": [[0, 0], [1, 1]]}}).status_code == 422
+        scene = client.post("/api/scenes", json={"video_id": video["id"], "name": "road",
+            "geometry": geometry})
+        assert scene.status_code == 200, scene.text
+        created = client.post("/api/runs", json={"scene_id": scene.json()["id"], "sample_fps": 5}).json()
+        with connection() as db:
+            job = dict(db.execute("SELECT * FROM runs WHERE id=?", (created["id"],)).fetchone())
+        process(job)
+        events = client.get(f"/api/runs/{created['id']}/results?view=events").json()
+        assert {event["tracker_id"] for event in events} == {1}
+        frame = client.get(f"/api/runs/{created['id']}/results?view=detections&time_s=1").json()
+        assert {obj["tracker_id"] for obj in frame["objects"]} == {1, 2}
 
 
 def test_ensemble_worker_integrates_tracked_boxes_with_events(monkeypatch):
@@ -440,3 +486,45 @@ def test_supplied_example_four_starts_with_triangular_cartogram():
         assert client.patch(f"/api/runs/{run_id}",
                             json={"action": "set_topology", "topology": "four_way"}).status_code == 200
         assert client.get(f"/api/runs/{run_id}").json()["geometry"]["topology_source"] == "user"
+
+
+def test_night_configuration_cluster_results_and_metrics_contract(monkeypatch):
+    import supervision as sv
+    from app.worker import run as process
+    from app.storage import connection
+
+    settings=[]
+    class Processor:
+        def __init__(self, *args, **kwargs): pass
+        def process_frame(self, frame):
+            settings.append(self.use_night)
+            return sv.Detections.empty()
+    monkeypatch.setattr('app.ensemble.FastFrameProcessor',Processor)
+    with TestClient(app) as client:
+        video=client.post('/api/videos',files={'file':('night.mp4',video_bytes(),'video/mp4')}).json()
+        run=client.post('/api/runs',json={'video_id':video['id'],'lighting':'night'}).json()
+        assert json.loads(run['model'])['lighting']=='night'
+        with connection() as db:
+            job=dict(db.execute('SELECT * FROM runs WHERE id=?',(run['id'],)).fetchone())
+        process(job)
+        result=client.get(f"/api/runs/{run['id']}/results").json()
+        assert result['performance']['enhanced_frames']==len(settings)>0
+        assert all(settings)
+        assert result['clusters']['clusters']==[]
+        reference={'lighting':'night','frames':[{'t':0,'objects':[]}]}
+        uploaded=client.post(f"/api/videos/{video['id']}/ground-truth",files={'file':('ref.json',json.dumps(reference),'application/json')}).json()
+        metrics=client.get(f"/api/runs/{run['id']}/evaluate/{uploaded['id']}").json()
+        assert metrics['annotated_frames']==1 and metrics['mota'] is None
+        assert metrics['lighting']=='night'
+        assert client.post('/api/runs',json={'video_id':video['id'],'lighting':'invalid'}).status_code==422
+        assert client.post('/api/runs',json={'video_id':video['id'],'night_model':'../../outside.pt'}).status_code==422
+
+
+def test_event_category_and_nonfinite_time_are_rejected():
+    with TestClient(app) as client:
+        video=client.post('/api/videos',files={'file':('validate.mp4',video_bytes(),'video/mp4')}).json()
+        run=client.post('/api/runs',json={'video_id':video['id']}).json()
+        payload={'category':'airplane','time_s':1,'from_direction':'В кадре','to_direction':'В кадре'}
+        assert client.post(f"/api/runs/{run['id']}/events",json=payload).status_code==422
+        payload.update(category='car',time_s='Infinity')
+        assert client.post(f"/api/runs/{run['id']}/events",json=payload).status_code==422

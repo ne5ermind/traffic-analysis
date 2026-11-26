@@ -1,0 +1,42 @@
+name: checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg libgl1 libglib2.0-0
+      - run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r requirements-dev.txt
+      - run: npm ci
+      - run: npm run build
+      - run: pytest -q tests
+      - run: python -m compileall -q app tests scripts
+      - run: docker compose config --quiet
+      - run: npx playwright install --with-deps chromium
+        if: matrix.python == '3.11'
+      - name: Browser workflow on isolated synthetic data
+        if: matrix.python == '3.11'
+        env:
+          INNOVA_DATA: /tmp/innova-ui
+        run: |
+          python scripts/seed_ui.py
+          uvicorn app.main:app --host 127.0.0.1 --port 8017 > /tmp/innova-ui.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8017/api/health && break || sleep 1; done
+          npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.python == '3.11'
+        with:
+          name: browser-verification
+          path: artifacts/react-*.png

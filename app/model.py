@@ -6,6 +6,8 @@ def load_yolo(weights: str | Path):
     from ultralytics import YOLO
     from .storage import ROOT
     weights = Path(weights)
+    if not weights.is_file():
+        raise FileNotFoundError(f"Нет локальных весов: {weights}. Сначала загрузите модель в data/models.")
     try:
         return YOLO(str(weights))
     except RuntimeError as exc:

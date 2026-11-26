@@ -2,7 +2,7 @@
 
 - **Статус:** принято
 - **Дата:** 2026-10-17
-- **Модули:** `app/cartogram.py`, export-часть `app/main.py`
+- **Модули:** `app/cartogram.py`, `app/api/results.py`, `app/api/reports.py`
 
 ## Контекст
 

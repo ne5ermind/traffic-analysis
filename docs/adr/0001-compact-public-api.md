@@ -16,9 +16,9 @@
 
 1. `GET /api/videos/{video_id}/media` заменяет два маршрута. `kind=file` отдаёт видео, `kind=frame` — JPEG-кадр.
 2. `PATCH /api/runs/{run_id}` объединяет команды `cancel` и `set_topology`.
-3. `GET /api/runs/{run_id}/results` по умолчанию возвращает `summary`, `events` и `cartogram` одним ответом. Параметр `view` позволяет запросить один раздел или `detections` для текущего кадра.
+3. `GET /api/runs/{run_id}/results` по умолчанию возвращает `summary`, `events`, `cartogram`, `clusters` и `performance` одним ответом. Параметр `view` позволяет запросить один раздел или `detections` для текущего кадра.
 4. Добавление и правка события используют один ресурс `/api/runs/{run_id}/events` с методами `POST` и `PATCH`.
-5. Swagger UI генерируется FastAPI по адресу `/docs`, а машиночитаемая схема — `/openapi.json`. Названия, enum, ограничения и описания берутся из моделей и декораторов в `app/main.py`.
+5. Swagger UI генерируется FastAPI по адресу `/docs`, а машиночитаемая схема — `/openapi.json`. Названия, enum, ограничения и описания берутся из `app/api/schemas.py` и ресурсных модулей `app/api/`.
 6. Два служебных маршрута для загрузки эталона и оценки ошибки сохранены, но скрыты из основного Swagger, так как не участвуют в базовом пользовательском сценарии.
 
 ## Альтернативы

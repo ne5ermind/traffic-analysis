@@ -1,0 +1,31 @@
+{
+  "duration_s": 905.4666666666667,
+  "wall_s_including_model_load": 760.5474506390001,
+  "passed_time_limit": true,
+  "platform": "Linux-6.10.14-linuxkit-aarch64-with-glibc2.41",
+  "python": "3.11.17",
+  "container": true,
+  "cpu_max": "300000 100000",
+  "performance": {
+    "elapsed_s": 757.327672262,
+    "video_seconds": 905.4666666666667,
+    "processed_frames": 1991,
+    "decoded_frames": 27149,
+    "inference_fps": 2.628980919254205,
+    "runtime": {
+      "cpu_budget": 4,
+      "inference_threads": 2,
+      "decode_threads": 1,
+      "prefetch_frames": 4,
+      "device": "cpu"
+    },
+    "lighting": "night",
+    "enhanced_frames": 1991,
+    "night_model": null,
+    "effective_sample_fps": 2.0
+  },
+  "events": 213,
+  "clusters": 1,
+  "video_sha256": "3e66381a60818117a1084a55b84ec2610c15c5d9df559a9d86c1390a93d21e34",
+  "note": "Performance only; no accuracy claim without independent annotation."
+}

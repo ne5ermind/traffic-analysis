@@ -21,9 +21,10 @@ class Tensor:
 class Model:
     def __init__(self, frames):
         self.frames = iter(frames)
+        self.expected_classes = list(TARGET_CLASSES)
 
     def predict(self, image, **kwargs):
-        assert kwargs["classes"] == list(TARGET_CLASSES)
+        assert kwargs["classes"] == self.expected_classes
         assert kwargs["conf"] == 0.10
         assert kwargs["iou"] == 0.70
         boxes = next(self.frames)
@@ -45,6 +46,25 @@ class CapturingTracker:
         self.received.append(detections)
         detections.tracker_id = np.arange(len(detections), dtype=np.int64)
         return detections
+
+
+def test_mac_accelerator_is_explicit_and_cpu_fallback_is_kept(monkeypatch):
+    from app.ensemble import FastFrameProcessor, inference_device
+    import torch
+
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert inference_device() == "cpu"
+    monkeypatch.setenv("INNOVA_DEVICE", "mps")
+    assert inference_device() == "mps"
+    model = Model([[]])
+    processor = FastFrameProcessor("test.pt", fps=6, model=model, tracker=CapturingTracker())
+    assert processor.device == "mps"
+    processor.process_frame(np.zeros((40, 80, 3), dtype=np.uint8))
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+    with pytest.raises(ValueError, match="MPS"):
+        inference_device()
+    monkeypatch.setenv("INNOVA_DEVICE", "cpu")
+    assert inference_device() == "cpu"
 
 
 def test_wbf_fuses_only_matching_coco_classes_before_tracking():
@@ -150,3 +170,25 @@ def test_processors_reject_empty_or_malformed_frames():
         processor.process_frame(np.zeros((0, 10, 3), dtype=np.uint8))
     with pytest.raises(ValueError, match="Некорректный"):
         processor.process_frame(None)
+
+
+def test_custom_night_class_mapping_and_tracker_survive_model_switch():
+    from app.ensemble import FastFrameProcessor
+    tracker=CapturingTracker()
+    day=Model([[([10,10,30,30],.9,2)]])
+    night=Model([[([10,10,30,30],.9,4)]])
+    night.names={0:'pedestrian',1:'car',2:'truck',3:'bicycle',4:'bus',5:'motorcycle'}
+    night.expected_classes=[0,1,2,3,4,5]
+    original_predict=night.predict
+    def predict(*args,**kwargs):
+        result=original_predict(*args,**kwargs)
+        result[0].names=night.names
+        return result
+    night.predict=predict
+    processor=FastFrameProcessor('day.pt',fps=6,model=day,tracker=tracker)
+    processor.night_model=night
+    frame=np.zeros((40,40,3),dtype=np.uint8)
+    assert processor.process_frame(frame).class_id.tolist()==[2]
+    processor.use_night=True
+    assert processor.process_frame(frame).class_id.tolist()==[5]
+    assert len(tracker.received)==2 and processor.tracker is tracker
