@@ -21,7 +21,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: npm ci
       - run: npm run build
-      - run: pytest -q tests
+      - run: python -m pytest -q tests
       - run: python -m compileall -q app tests scripts
       - run: docker compose config --quiet
       - run: npx playwright install --with-deps chromium
