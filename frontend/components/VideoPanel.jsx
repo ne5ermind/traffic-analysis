@@ -1,6 +1,16 @@
 import React, {useEffect, useRef, useState} from 'react';
+import {useDispatch, useSelector} from 'react-redux';
 import {api, categories, timeLabel} from '../api';
-export function VideoPanel({video, runId, geometry, pending, onPoint, editing}) {
+import {addPoint, selectEditing, selectPending, selectVisibleGeometry} from '../store/sceneEditorSlice.js';
+import {selectRunId, selectVideo} from '../store/workspaceSlice.js';
+
+export function VideoPanel() {
+  const dispatch = useDispatch();
+  const video = useSelector(selectVideo);
+  const runId = useSelector(state => selectEditing(state) ? '' : selectRunId(state));
+  const geometry = useSelector(selectVisibleGeometry);
+  const pending = useSelector(selectPending);
+  const editing = useSelector(selectEditing);
   const player = useRef(null), canvas = useRef(null), sequence = useRef(0);
   const [time, setTime] = useState(0), [objects, setObjects] = useState([]), [mediaError, setMediaError] = useState('');
   useEffect(() => { setTime(0); setObjects([]); setMediaError(''); sequence.current++; }, [video?.id, runId]);
@@ -40,7 +50,10 @@ export function VideoPanel({video, runId, geometry, pending, onPoint, editing}) 
     draw(); const observer = new ResizeObserver(draw); observer.observe(target);
     return () => observer.disconnect();
   }, [geometry, pending, objects, video]);
-  const move = event => { const rect=event.currentTarget.getBoundingClientRect(); onPoint([(event.clientX-rect.left)/rect.width,(event.clientY-rect.top)/rect.height]); };
+  const move = event => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    dispatch(addPoint([(event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height]));
+  };
   return <section className="panel viewer-panel" aria-labelledby="videoHeading">
     <div className="section-head"><div><h2 id="videoHeading">Видеопоток</h2><p id="videoTitle" className="section-subtitle">{video?.name || 'Видео не выбрано'}</p></div></div>
     <div className="viewer" style={{aspectRatio:video ? `${video.width}/${video.height}` : '16/9'}}>

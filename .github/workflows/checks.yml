@@ -21,6 +21,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: npm ci
       - run: npm run build
+      - run: node --test tests/workspace-middleware.test.mjs
       - run: python -m pytest -q tests
       - run: python -m compileall -q app tests scripts
       - run: docker compose config --quiet
