@@ -1,6 +1,6 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {useDispatch, useSelector} from 'react-redux';
-import {useWorkspaceSync} from './hooks/useWorkspaceSync.js';
+import {startWorkspaceSync} from './store/workspaceMiddleware.js';
 import {noticeChanged, selectNotice, selectRunId, selectVideoId} from './store/workspaceSlice.js';
 import {Sidebar} from './components/Sidebar';
 import {VideoPanel} from './components/VideoPanel';
@@ -18,7 +18,8 @@ function Workspace() {
   </div>;
 }
 export default function App() {
-  useWorkspaceSync();
+  const dispatch = useDispatch();
   const videoId = useSelector(selectVideoId);
+  useEffect(() => startWorkspaceSync(dispatch), [dispatch]);
   return <><a className="skip-link" href="#mainContent">Перейти к рабочей области</a><header className="topbar"><div className="brand"><strong>InnovaTransport</strong><span>Анализ транспортных потоков</span></div><span className="system-badge">Локальная обработка</span></header><main className="app-shell" id="mainContent"><Sidebar/><Workspace key={videoId}/></main></>;
 }

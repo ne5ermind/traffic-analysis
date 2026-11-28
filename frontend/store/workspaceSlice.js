@@ -1,9 +1,11 @@
-import {createAsyncThunk, createSlice} from '@reduxjs/toolkit';
+import {createAction, createAsyncThunk, createSlice} from '@reduxjs/toolkit';
 import {api} from '../api.js';
 
 export const loadVideos = createAsyncThunk('workspace/loadVideos', (_, {signal}) =>
   api('/api/videos', {signal}),
 );
+
+export const refreshRequested = createAction('workspace/refreshRequested');
 
 export const workspaceSlice = createSlice({
   name: 'workspace',
@@ -17,7 +19,6 @@ export const workspaceSlice = createSlice({
     runId: '',
     result: null,
     interval: 900,
-    revision: 0,
     notice: '',
     pendingOperations: 0,
   },
@@ -46,9 +47,6 @@ export const workspaceSlice = createSlice({
     },
     intervalChanged(state, {payload}) {
       state.interval = payload;
-    },
-    refreshRequested(state) {
-      state.revision++;
     },
     noticeChanged(state, {payload}) {
       state.notice = payload;
@@ -86,7 +84,6 @@ export const workspaceSlice = createSlice({
     selectRunId: state => state.runId,
     selectResult: state => state.result,
     selectInterval: state => state.interval,
-    selectRevision: state => state.revision,
     selectNotice: state => state.notice,
     selectBusy: state => state.pendingOperations > 0,
   },
@@ -94,10 +91,10 @@ export const workspaceSlice = createSlice({
 
 export const {
   videoSelected, runSelected, scenesLoaded, runsLoaded, resultsLoaded,
-  intervalChanged, refreshRequested, noticeChanged, operationStarted, operationFinished,
+  intervalChanged, noticeChanged, operationStarted, operationFinished,
 } = workspaceSlice.actions;
 
 export const {
   selectVideos, selectVideo, selectVideoId, selectVideoSelection, selectScenes, selectRuns,
-  selectRun, selectRunId, selectResult, selectInterval, selectRevision, selectNotice, selectBusy,
+  selectRun, selectRunId, selectResult, selectInterval, selectNotice, selectBusy,
 } = workspaceSlice.selectors;
